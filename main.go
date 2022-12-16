@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/proullon/ramsql/driver"
 )
 
@@ -115,6 +114,40 @@ func createMovieHandler(c echo.Context) error {
 	}
 }
 
+func UpdateMovieHandler(c echo.Context) error {
+	var m Movie
+	var mv = &Movie{}
+	rows, err := db.Query(`
+	SELECT * FROM goimdb
+	`)
+	if err != nil {
+		log.Fatal("Query Error:", err)
+	}
+	for rows.Next() {
+		err := rows.Scan(&m.ID, &m.ImdbID, &m.Title, &m.Year, &m.Rating, &m.IsSuperHero)
+		if err != nil {
+			log.Fatal("for rows error:", err)
+		}
+		if err := c.Bind(mv); err != nil {
+			return c.JSON(http.StatusBadRequest, err.Error())
+		}
+		stmt2, err := db.Prepare(`
+		UPDATE goimdb
+		SET rating = ?
+		WHERE imdbID = ?
+		`)
+		if err != nil {
+			log.Fatal("", err)
+		}
+		_, err = stmt2.Exec(mv.Rating, mv.ImdbID)
+		if err != nil {
+			log.Fatal("Update error:", err)
+		}
+		defer stmt2.Close()
+	}
+	return c.JSON(http.StatusOK, mv)
+}
+
 var db *sql.DB
 
 func conn() {
@@ -148,11 +181,12 @@ func main() {
 	}
 
 	e := echo.New()
-	e.Use(middleware.Logger())
+	// e.Use(middleware.Logger())
 	e.GET("/movies", getAllMoviesHandler)
 	e.GET("/movies/:imdbID", getMoviebyIdHandler)
 
 	e.POST("/movies", createMovieHandler)
+	e.PUT("/movies/:imdbID", UpdateMovieHandler)
 
 	port := "2565"
 	log.Printf("starting... port:%s", port)
